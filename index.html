@@ -116,6 +116,12 @@ canvas#out{width:100%;height:auto;max-height:62vh;object-fit:contain;border-radi
 .share .ic{width:52px;height:52px;border-radius:50%;display:grid;place-items:center;color:#fff}
 .share .ic svg{width:26px;height:26px;fill:currentColor}
 .share .gen .ic{background:var(--paper);color:var(--ink);border:1.5px solid var(--line)}
+.guide{border:1.5px solid var(--accent);background:#f2f6fe;border-radius:12px;padding:14px;display:grid;gap:10px}
+.guide h3{margin:0;font-family:var(--display);font-size:17px}
+.guide ol{margin:0;padding-inline-start:20px;display:grid;gap:10px}
+.guide li{line-height:1.45}
+.guide .btn{font-size:14px;padding:7px 12px;margin-top:4px}
+.guide kbd{font-family:var(--display);font-size:13px;border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:0 5px;background:#fff}
 .toast{font-size:14px;color:var(--ok);margin:0}
 .toast:empty{display:none}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
@@ -200,6 +206,7 @@ canvas#out{width:100%;height:auto;max-height:62vh;object-fit:contain;border-radi
       <div class="share" id="shareRow"></div>
       <p class="toast" id="toast" role="status"></p>
       <p class="note" id="shareNote"></p>
+      <div class="guide" id="guide" hidden></div>
       <label for="pubText" class="sub-h">הטקסט לפוסט <span class="hint">(אפשר לערוך)</span></label>
       <textarea id="pubText" rows="10"></textarea>
     </div>
@@ -215,8 +222,8 @@ const CONFIG = {
   verifiedText: "תואם לתוצאות הרשמיות",
   ownText: "לפי הספירה בקלפי",
   officialText: "התוצאות הרשמיות · ועדת הבחירות",
-  sourceUrl: "https://votes26.bechirot.gov.il/",          /* קישור לתוצאות הרשמיות; אם ממולא, נוסף לפוסט */
-  siteUrl: "https://avuryoni.github.io/elections2026/",            /* כתובת האתר אחרי העלאה, לשיתוף בפייסבוק וטלגרם */
+  sourceUrl: "",          /* קישור לתוצאות הרשמיות; אם ממולא, נוסף לפוסט */
+  siteUrl: "",            /* כתובת האתר אחרי העלאה, לשיתוף בפייסבוק וטלגרם */
   /* שם קצר לגרפיקה, ושם מלא לתפריט */
   lists: {
     "מחל":["הליכוד","הליכוד בהנהגת בנימין נתניהו"], "דרך":["רשימת איזנקוט","בראשות גדי איזנקוט"],
@@ -493,10 +500,10 @@ function hrefs(){
   const xText = `${CONFIG.headline}: קלפי ${state.ballot} ב${state.town}\n${resultLines()}\n${CONFIG.closing} ${CONFIG.hashtag}`;
   return [
     {k:"siWhatsapp", name:"וואטסאפ", href:`https://wa.me/?text=${enc(text)}`},
-    {k:"siFacebook", name:"פייסבוק", href: site? `https://www.facebook.com/sharer/sharer.php?u=${enc(site)}` : "https://www.facebook.com/"},
+    {k:"siFacebook", name:"פייסבוק", href:"https://www.facebook.com/", noText:true},
     {k:"siX", name:"X", href:`https://x.com/intent/post?text=${enc(xText)}`},
     {k:"siTelegram", name:"טלגרם", href:`https://t.me/share/url?url=${enc(site||" ")}&text=${enc(text)}`},
-    {k:"siInstagram", name:"אינסטגרם", href:"https://www.instagram.com/"}
+    {k:"siInstagram", name:"אינסטגרם", href:"https://www.instagram.com/", noText:true, noPaste:true}
   ];
 }
 function buildShare(){
@@ -504,19 +511,57 @@ function buildShare(){
   row.innerHTML = hrefs().map(n=>`<a href="${n.href}" target="_blank" rel="noopener"><span class="ic" style="background:#${ICONS[n.k].c}">${svg(n.k)}</span>${n.name}</a>`).join("")
     + `<button type="button" class="gen" id="sSave"><span class="ic">${GEN.save}</span>שמירה</button>`
     + `<button type="button" class="gen" id="sCopy"><span class="ic">${GEN.copy}</span>העתקה</button>`;
-  row.querySelectorAll("a").forEach(a=>a.addEventListener("click", async e=>{
+  row.querySelectorAll("a").forEach((a,i)=>a.addEventListener("click", async e=>{
     if (canShareFiles){ e.preventDefault(); await nativeShare(); return; }
+    e.preventDefault(); showGuide(hrefs()[i]); return;
     toast(await copyText()? "הטקסט הועתק. שמור/י את התמונה וצרף/י אותה לפוסט." : "שמור/י את התמונה והעתק/י את הטקסט.");
   }));
   $("#sSave").addEventListener("click", async ()=>toast(await saveImage()? "התמונה נשמרה." : "השמירה לא הצליחה. נסה/י שוב."));
   $("#sCopy").addEventListener("click", async ()=>{ if(await copyText()) toast("הטקסט הועתק."); else { $("#pubText").select(); toast("סמנו והעתיקו ידנית."); } });
-  $("#shareNote").textContent = canShareFiles ? "לחיצה על רשת פותחת את השיתוף של הטלפון, עם התמונה והטקסט." : "במחשב: לחיצה על רשת מעתיקה את הטקסט ופותחת אותה. שמור/י את התמונה וצרף/י אותה לפוסט.";
+  $("#shareNote").textContent = canShareFiles ? "לחיצה על רשת פותחת את השיתוף של הטלפון, עם התמונה והטקסט." : "בחר/י רשת ונציג לך איך לפרסם בה בכמה לחיצות.";
+}
+/* במחשב: מדריך קצר לכל רשת, כי אף רשת לא מקבלת תמונה דרך קישור */
+async function copyImage(){
+  try{
+    const png = new Promise(r=>cv.toBlob(r,"image/png"));
+    await navigator.clipboard.write([new ClipboardItem({"image/png": png})]); return true;
+  }catch(e){ return false; }
+}
+const mod = /Mac|iPhone|iPad/.test(navigator.platform) ? "⌘" : "Ctrl";
+const paste = `<span dir="ltr"><kbd>${mod}</kbd>+<kbd>V</kbd></span>`;
+function showGuide(n){
+  const g=$("#guide"), open=`<a class="btn primary" href="${n.href}" target="_blank" rel="noopener">פתיחת ${n.name}</a>`;
+  const bText=`<button type="button" class="btn" data-a="text">העתקת הטקסט</button>`;
+  const bImg = n.noPaste ? `<button type="button" class="btn" data-a="save">שמירת התמונה</button>` : `<button type="button" class="btn" data-a="img">העתקת התמונה</button>`;
+  let steps;
+  if (n.noPaste) steps = [
+    `שמרו את התמונה למחשב.<br>${bImg}`,
+    `העתיקו את הטקסט.<br>${bText}`,
+    `פתחו את ${n.name}, לחצו על "יצירה", העלו את התמונה והדביקו את הטקסט (${paste}).<br>${open}`];
+  else if (n.noText) steps = [
+    `העתיקו את הטקסט.<br>${bText}`,
+    `פתחו את ${n.name}, לחצו על "על מה את/ה חושב/ת?" והדביקו (${paste}).<br>${open}`,
+    `חזרו לכאן, העתיקו את התמונה והדביקו אותה באותו פוסט (${paste}).<br>${bImg}`];
+  else steps = [
+    `פתחו את ${n.name}. הטקסט כבר יופיע שם.<br>${open}`,
+    `חזרו לכאן, העתיקו את התמונה והדביקו אותה בהודעה (${paste}).<br>${bImg}`];
+  g.innerHTML = `<h3>פרסום ב${n.name} מהמחשב</h3><ol>${steps.map(s=>`<li>${s}</li>`).join("")}</ol>`;
+  g.hidden=false; toast("");
+  g.querySelectorAll("button").forEach(b=>b.addEventListener("click", async ()=>{
+    const a=b.dataset.a, old=b.textContent; let ok;
+    if (a==="text") ok=await copyText();
+    else if (a==="img"){ ok=await copyImage(); if(!ok){ ok=await saveImage(); b.textContent= ok? "לא ניתן להעתיק, התמונה נשמרה: צרפו אותה מהקבצים" : "לא הצלחנו. נסו את כפתור השמירה"; return; } }
+    else ok=await saveImage();
+    b.textContent = ok? "✓ "+(a==="text"?"הטקסט הועתק":a==="img"?"התמונה הועתקה":"התמונה נשמרה") : "לא הצליח, נסו שוב";
+    setTimeout(()=>{ b.textContent=old; }, 3000);
+  }));
+  g.scrollIntoView({block:"nearest", behavior:"smooth"});
 }
 function refreshLinks(){ const hs=hrefs(); $("#shareRow").querySelectorAll("a").forEach((a,i)=>a.href=hs[i].href); }
 $("#pubText").addEventListener("input", refreshLinks);
 $("#open").addEventListener("click", ()=>{
   const p=problems(); if(p.length){ $("#msg").textContent="חסר: "+p.join(", ")+"."; return; }
-  $("#msg").textContent=""; draw(); $("#pubText").value=postText(); toast(""); buildShare();
+  $("#msg").textContent=""; draw(); $("#pubText").value=postText(); toast(""); $("#guide").hidden=true; buildShare();
   const d=$("#pub"); if(!d.open){ try{ d.showModal(); }catch(e){ d.setAttribute("open",""); } }
 });
 $("#close").addEventListener("click", ()=>$("#pub").close());
